@@ -1,0 +1,20 @@
+syntax: glob
+
+
+
+*~
+*.sw[pmno]
+*.orig
+*.orig.*
+*.rej
+tags
+
+*.pyc
+
+syntax: rootglob
+
+release
+build
+stuff
+NOTES
+
