@@ -1,15 +1,9 @@
 --- popup.lua
 ---
---- Wrapper to make the popup api from vim in neovim.
+--- Wrapper to provide the popup api from vim in neovim.
 --- Hope to get this part merged in at some point in the future.
 ---
 --- Please make sure to update "POPUP.md" with any changes and/or notes.
-
--- TODO: CLEANUP
---      get rid of dummy_filter
-
--- TODO: Is there a way to do this without "full path"?
-local utils = require "popup.utils"
 
 local function SF(fmt, ...)
     return string.format(fmt, ...)
@@ -18,10 +12,11 @@ local PR = vim.schedule_wrap(function(fmt, ...)
     vim.print(SF(fmt, ...))
 end)
 
+-- TODO: Is there a way to do this without "full path"?
+local utils = require "popup.utils"
+
 -- Some debug print/output helpers
 --require "plenary.popup.my_log"
-
--- TODO: local bit = require("bit")
 
 -- TODO: determine/use extras.hidden instead of vim.api.nvim_win_get_config(win_id).hide
 
@@ -121,7 +116,7 @@ local neovim_passthru = {
 ---@field border_thickness [integer, integer, integer, integer]
 ---@field padding [integer, integer, integer, integer]
 ---@field button_close_pad integer for checking if mouse on "X" button
----@field filter function popup's filter, may be "dummy_filter"
+---@field filter function popup's filter, may be nil
 ---@field moved_bounds PosBounds
 ---@field mousemoved_bounds PosBounds
 ---@field mapping boolean
@@ -143,15 +138,6 @@ local on_key_ns_id      ---@type integer?
 local sorted_visible_popup_list = {}    ---@type integer[]
 local maps = {}
 
---TODO: REMOVE FUNCTION
-local function run_pup(win_id, fn)
-  local pup = popup._popups[win_id]
-  if pup then
-    fn(pup)
-  end
-  return pup
-end
-
 ---@param bounds PosBounds
 ---@return boolean true if bounds
 local function is_bounds(bounds)
@@ -162,18 +148,6 @@ end
 ---@param bounds PosBounds
 local function is_nil_bounds(bounds)
   return not is_bounds(bounds)
-  -- return bounds == nil
-  --   or type(bounds) == "table" and bounds[1] == 0 and bounds[2] == 0 and bounds[3] == 0
-end
-
---TODO: REMOVE FUNCTION
----@param win_id integer
----@param key string
----@return boolean constant false, key is not discarded
-local function dummy_filter(win_id, key)
-  _,_ = win_id,key
-  --llog("dummy filter: dummy")
-  return false
 end
 
 -- TODO: may want to set a re_filter flag indicating a new filter should be constructed
@@ -181,17 +155,16 @@ end
 
 -- This is called after a popup is created or changed. Information is
 -- re-created as needed.
---          - re-create list of visible popup sorted by zindex (primarily for filtering)
---          - turn 'mousemoveevent' on/off with adjust_need_mouse_move
---          - create/destroy vim.on_key() as needed
---          - create filter trampoline for specified win_id
+--     - re-create list of visible popup sorted by zindex (primarily for filtering)
+--     - turn 'mousemoveevent' on/off with adjust_need_mouse_move
+--     - create/destroy vim.on_key() as needed
+--     - create filter trampoline for specified win_id in create_bounce_to_filter
 ---@param win_id integer? The config of the specified popup is changed
 local function significant_popup_change(win_id)
   if win_id then
     local pup = popup._popups[win_id]
     local vim_options = pup.vim_options
 
-    --pup.extras.filter = dummy_filter
     pup.extras.filter = nil
 
     -- Only a visible popup needs a filter. Note must use popup.hide/show.
@@ -233,13 +206,10 @@ local function significant_popup_change(win_id)
   L.adjust_need_mouse_move(need_mousemev)
 
   -- Ensure there's an on_key handler if there is any popup.
-  -- TODO: OPTIM minor: An active popup may not require a key handler; but too messy.
+  -- minor OPTIM: An active popup may not require a key handler; but too messy.
   if #sorted_visible_popup_list > 0 then
     --llog("on_key Dispatcher: ON: %s, n active %d", on_key_ns_id, vim.on_key())
     local opts = disable_mapping and { mapping = false} or {}
-    --if not on_key_ns_id then
-    --  on_key_ns_id = vim.on_key(L.on_key_local_dispatch, nil, opts)
-    --end
     on_key_ns_id = vim.on_key(L.on_key_local_dispatch, on_key_ns_id, opts)
   else
     --llog("on_key Dispatcher: OFF: %s, n active %d", on_key_ns_id, vim.on_key())
@@ -256,20 +226,6 @@ local function significant_popup_change(win_id)
   if not win_id then
     return
   end
-
-
-  -- local pup = popup._popups[win_id]
-  -- local vim_options = pup.vim_options
-
-  -- pup.extras.filter = dummy_filter
-
-  -- -- Only a visible popup needs a filter. Note must use popup.hide/show.
-  -- local hidden = vim.api.nvim_win_get_config(win_id).hide
-
-  -- if not hidden and vim_options.filter then
-  --   local allow_mapping = not (vim_options.mapping == false)
-  --   pup.extras.filter = L.create_bounce_to_filter(pup, allow_mapping)
-  -- end
 end
 
 -- ===========================================================================
@@ -310,7 +266,6 @@ function L.adjust_need_mouse_move(need)
       })
       --llog("MevAU start: mouse_mev: %s, id %d", mouse_mev, mev_au_id)
     end
-    --vim.o.mousemoveevent = true
   else
     if mouse_mev ~= nil then
       local mev = mouse_mev
@@ -443,11 +398,11 @@ local function mouse_dispatch(typed)
   --  mouse_event, count_pressed_buttons(), vim.inspect(pressed_buttons, {newline=""}), fresh_click)
 
   local ret = L.mouse_cb(mouse_win_id, mouse_event, mp, fresh_click)
-  --log_dispatch("mouse_dispatch: id %d, event %s, cb_ret %s, ret %s", mouse_win_id, mouse_event, ret, not ret)
+  --log_dispatch("mouse_dispatch: id %d, event %s, cb_ret %s, ret %s",
+  --  mouse_win_id, mouse_event, ret, not ret)
   return not ret
-
-  --retrn not mouse_cb(mouse_win_id, mouse_event, mp, fresh_click)
 end
+
 
 ---First dispatch mouse events to popups and then keys to popup filters.
 ---It's like a window manager. Only when "use_local_dispatch" is true.
@@ -458,12 +413,10 @@ end
 L.on_key_local_dispatch = function(key, typed)
   local discard = nil
   -- TODO: take into account "disable_mapping". Set a global in significant_popup_change.
-  --local mouse_event = maps.key2mouse[key]
   local special_key = key:byte() == 0x80
-  llog("ON_KEY_LOCAL_DISPATCH %s, %s, %s", key, typed, I(special_key))
+  --llog("ON_KEY_LOCAL_DISPATCH %s, %s, %s", key, typed, I(special_key))
   if special_key then
-    llog("ON_KEY_LOCAL_DISPATCH: mouse_dispatch")
-    --discard = mouse_dispatch(typed)
+    --llog("ON_KEY_LOCAL_DISPATCH: mouse_dispatch")
     if mouse_dispatch(typed) then
       discard = ""
     end
@@ -479,15 +432,13 @@ L.on_key_local_dispatch = function(key, typed)
   --        "If the filter function can't be called...close"
   --        and more
   if not special_key then
-    llog("ON_KEY_LOCAL_DISPATCH: filter_dispatch")
-    -- discard = L.filter_dispatch(key, typed) and ""
+    --llog("ON_KEY_LOCAL_DISPATCH: filter_dispatch")
     if L.filter_dispatch(key, typed) then
       discard = ""
     end
   end
   return discard
 end
-
 
 local mp_press  -- mousepos when press
 local drag_start_win_x
@@ -534,15 +485,12 @@ function L.mouse_cb(win_id_press, event, mp, fresh_click)
     return border_drag_ok
   end
 
-  --local mp = vim.fn.getmousepos()
-
   if event == "<LeftMouse>" then
     -- Note that only consume if draggable. The idea is that click/release might
     -- be used by other things. At the time of the click, don't know if the popup
     -- would use it.
     window_drag_ok = false
     if fresh_click then
-      --win_id_press = mp.winid
       pup = popup._popups[win_id_press]
       mp_press = mp
       is_window_drag = nil
@@ -552,17 +500,14 @@ function L.mouse_cb(win_id_press, event, mp, fresh_click)
       end
 
       output_msg(SF("fresh-1: id_press %d, drag_ok %s, %s", win_id_press, window_drag_ok, I({mp.screencol, mp.screenrow})))
-      -- popup: mouse_cb: <LeftMouse>: '{ 30, 16 }'
       local xx = popup.getpos(win_id_press)
       output_msg(SF("fresh-2: x,y (%d,%d) w,h (%d,%d)",xx.col, xx.line, xx.width, xx.height))
-      -- popup: mouse_cb: <LeftMouse>: 'x,y (20,10) w,h (11,7)'
     else
       msg = "ignoring LeftMouse because not fresh_click"
     end
 
     output_msg("consume")
     return false -- don't propogate, consume
-    --return not window_drag_ok -- propogate if not draggable, otherwise consume
 
   elseif win_id_press then
     pup = popup._popups[win_id_press]
@@ -592,7 +537,6 @@ function L.mouse_cb(win_id_press, event, mp, fresh_click)
     window_drag_ok = nil
     is_window_drag = nil
     output_msg("propogate")
-    -- return false
     return true   -- propogate
   end
 
@@ -654,11 +598,10 @@ function L.filter_dispatch(key, typed)
   --        unless mapping is false.
 
   local discard = false
-  -- send the typed key to filters, check in z order
+  -- send the typed key to filters, check in z order,
+  -- terminate loop at first filter discard.
   local pups = sorted_visible_popup_list
   for _, win_id in ipairs(pups) do
-    --local pup = popup._popups[win_id]
-    --discard = pup.extras.filter(key, typed)
     local filter = popup._popups[win_id].extras.filter
     discard = filter and filter(key, typed)
     --llog("filter_dispatch: not mouse_event, win_id %d, key %s, typed %s, discard %s", win_id, key, L.k2m(typed), discard)
@@ -671,7 +614,7 @@ end
 
 -- This is about creating an efficient function to look at state when a key
 -- is pressed and see if the popup's filter should be called.
--- Note that there is only one on_key handler; see filter_dispatch.
+-- Note that there is only one on_key handler, it's shared by popups; see filter_dispatch.
 
 -- Check if current mode is specified in filtermode
 --    1. Convert the return of "mode()" to a single char mode as used in filtermode.
@@ -679,9 +622,8 @@ end
 --    3.    Check if found
 local function mode_match(filtermode_match)
   local current_mode = vim.fn.mode()
-  -- string.find(xxx, current_mode) == 1
   local short_mode = maps.mode_to_short_mode[current_mode]
-  -- TODO: Not sure there's a good fix for the possibility that new modes may b added.
+  -- TODO: Not sure there's a good fix for the possibility that new modes may be added.
   -- If it's a new mode not handled then just use the first character.
   short_mode = short_mode or current_mode:sub(1,1)
   return filtermode_match:find(short_mode) ~= nil
@@ -692,6 +634,8 @@ end
 ---@param filtermode string specified by popup configuration
 ---@return string filtermode to check for filter dispatch
 local function convert_to_mode_match_string(filtermode)
+  -- TODO: Is the following better?
+  -- return filtermode:find("v") and filtermode .. "xs" or filtermode
   return filtermode .. (filtermode:find("v") and "xs" or "")
 end
 
@@ -818,6 +762,7 @@ end
 ---@param win_id integer window id of popup window
 ---@param bufnrs table list of buffers where the popup window will remain visible, {popup, parent}
 ---@see autocmd-events
+-- TODO: remove "events" arg, value is implicit.
 local function close_window_autocmd(events, win_id, bufnrs, cursor_win_id)
   local augroup = vim.api.nvim_create_augroup("popup_window_" .. win_id, {
     clear = true,
@@ -837,7 +782,6 @@ local function close_window_autocmd(events, win_id, bufnrs, cursor_win_id)
       group = augroup,
       buffer = bufnrs[2],
       callback = function()
-        --close_window_for_aucmd(win_id)
         close_window_for_aucmd_if_cursor_out_of_bounds(win_id, cursor_win_id)
       end,
     })
@@ -942,6 +886,7 @@ local function add_position_config(win_opts, vim_options, default_opts)
     win_opts.anchor = "NW" -- This is the default, but makes `posinvert` easier to implement
   end
 
+  -- TODO: fixed
   -- , fixed    When FALSE (the default), and:
   -- ,      - "pos" is "botleft" or "topleft", and
   -- ,      - "wrap" is off, and
@@ -1213,6 +1158,7 @@ function popup.create(what, vim_options)
     end
   end
 
+  -- TODO: textprop
   -- textprop, When present the popup is positioned next to a text
   -- ,   property with this name and will move when the text
   -- ,   property moves.  Use an empty string to remove.  See
@@ -1221,8 +1167,8 @@ function popup.create(what, vim_options)
   --   textpropwin
   --   textpropid
 
-  -- zindex, Priority for the popup, default 50.  Minimum value is
-  -- ,   1, maximum value is 32000.
+  -- zindex, Priority for the popup, default 50.  Minimum value is 1,
+  --     maximum value is 32000.
   local zindex = dict_default(vim_options, "zindex", option_defaults)
   win_opts.zindex = utils.bounded(zindex, 1, 32000)
   vim_options.zindex = win_opts.zindex -- save this for sorting
@@ -1244,15 +1190,10 @@ function popup.create(what, vim_options)
   }
   popup._popups[win_id] = pup
 
-  ----- Always catch the popup's close
-  -----local augroup = vim.api.nvim_create_augroup("popup_close_" .. win_id, {
-  -----  clear = true,
-  -----})
+  ----- Catch the popup's close
   vim.api.nvim_create_autocmd("WinClosed", {
-    -----group = augroup,
     pattern = tostring(win_id),
     callback = function()
-      -----pcall(vim.api.nvim_del_augroup_by_name, augroup)
       popup_win_closed(win_id)
       return true
     end,
@@ -1268,11 +1209,13 @@ function popup.create(what, vim_options)
     end,
   })
 
-  -- Moved, handled after since we need the window ID
+  -- Moved. Specifies to close the popup according to how the cursor moved.
+  -- Handled after since we need the window ID
   if vim_options.moved then
     local pos = vim.fn.getcursorcharpos()
     extras.moved_bounds = L.parse_moved_option(vim_options.moved, pos[2], pos[3])
     if not is_nil_bounds(extras.moved_bounds) then
+      -- TODO: remove events argument, value is implicit
       close_window_autocmd({ "CursorMoved", "CursorMovedI" }, win_id,
                            { bufnr, vim.fn.bufnr() }, vim.api.nvim_get_current_win())
     end
@@ -1281,23 +1224,23 @@ function popup.create(what, vim_options)
   -- MouseMoved
   extras.mousemoved_bounds = { 0, 0, 0 }
   if vim_options.mousemoved then
-    -- TODO: would like to capture current mouse pos, but doesn't work first time
+    -- Would like to capture current mouse pos, but doesn't work first time.
+    -- Set flag that bounds needs to set up when doing mouse_dispatch.
     extras.mousemoved_bounds = "prime"
-    --local mp = vim.fn.getmousepos() -- assume this will be needed
-    --extras.mousemoved_bounds = L.parse_moved_option(
-    --  vim_options.mousemoved, mp.winrow, mp.wincol, true)
   end
 
   if vim_options.time then
     local timer = vim.uv.new_timer()
-    timer:start(
-      vim_options.time,
-      0,
-      -- TODO: investigate the wrap
-      vim.schedule_wrap(function()
+    if timer then -- sigh
+      timer:start(
+        vim_options.time,
+        0,
+        -- TODO: investigate the wrap
+        vim.schedule_wrap(function()
           popup.close(win_id)
-      end)
-    )
+        end)
+      )
+    end
   end
 
   -- Window and Buffer Options
@@ -1329,24 +1272,24 @@ function popup.create(what, vim_options)
   -- tabpage: seems useless
 
 
-  -- ---------------------------------------- TODO: highlight handling
-
+  -- ---------------------------------------- TODO: border highlight handling
+  --
   -- TODO: borderhighlight
-
+  --
   -- borderhighlight List of highlight group names to use for the border.
   --                 When one entry it is used for all borders, otherwise
   --                 the highlight for the top/right/bottom/left border.
   --                 Example: ['TopColor', 'RightColor', 'BottomColor,
   --                 'LeftColor']
-
+  --
   -- border_options.highlight = vim_options.borderhighlight
   --               and string.format("Normal:%s", vim_options.borderhighlight)
   -- border_options.titlehighlight = vim_options.titlehighlight
-
-  -- ---------------------------------------- TODO: highlight handling
+  --
+  -- ---------------------------------------- TODO: border highlight handling
 
   if vim_options.highlight then
-    -- TODO: use neovim's "vim.o.xxx"
+    -- TODO: use neovim's "vim.o.xxx"?
     vim.api.nvim_set_option_value(
       "winhl",
       string.format("Normal:%s,EndOfBuffer:%s", vim_options.highlight, vim_options.highlight),
@@ -1355,7 +1298,6 @@ function popup.create(what, vim_options)
   end
 
   -- enter - neovim only
-
   if vim_options.enter then
     -- set focus after border creation so that it's properly placed (especially
     -- in relative cursor layout)
@@ -1702,6 +1644,7 @@ maps.mode_to_short_mode = {
 }
 
 
+-- TODO: put read_only function into util
 -- "Programming in Lua" 13.4 Read-only tables
 local function read_only (t)
   local proxy = {}

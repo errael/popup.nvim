@@ -1,24 +1,40 @@
-# Popup tracking
+# popup.nvim
 
-[WIP] An implementation of the Popup API from vim in Neovim. Hope to upstream
-when complete
+A `Neovim` API that is compatible with the vim `popup_*` APIs.
+
+## Install and Use
+
+Installation using Lazy.
+```
+$ cat ~/.config/nvim/lua/plugins/popup.lua
+return {
+    { 'errael/popup.nvim', dev = false },
+}
+```
+Check out [examples](examples) for usage.
+
+Use vim's documentation for now.
+
+Almost the entire vim popup API has been implemented; see following to identify the few missing pieces.
 
 ## Goals
 
-Provide an API that is compatible with the vim `popup_*` APIs. After
-stablization and any required features are merged into Neovim, we can upstream
-this and expose the API in vimL to create better compatibility.
+After stablization and any required features are merged into Neovim, can
+upstream this and expose the API in vimL to create better compatibility.
+
+# Popup Status and Features
+
+[WIP] An implementation of the Popup API from vim in Neovim.
 
 ## Notices
 - **2024-09-19:** change `enter` default to false to follow Vim.
-- **2021-09-19:** we now follow Vim's convention of the first line/column of the screen being indexed 1, so that 0 can be used for centering.
 - **2021-08-19:** we now follow Vim's default to `noautocmd` on popup creation. This can be overriden with `vim_options.noautocmd=false`
 
 ## List of Neovim Features Required
 
 - [x] Key handlers (used for `popup_filter`)
-    - [x] filter https://github.com/neovim/neovim/pull/30939
-    - [ ] mapping https://github.com/neovim/neovim/issues/30741
+    - [x] filter https://github.com/neovim/neovim/pull/30939 (integrated)
+    - [ ] mapping https://github.com/neovim/neovim/issues/30741 (open)
 - [ ] scrollbar for floating windows
     - [ ] firstline
     - [ ] scrollbar

@@ -7,18 +7,18 @@ end)
 
 PR('=== start')
 local Popup = require 'popup'
--- There are a variety of keybindings, at the end, to play with popop features.
---
--- popup_create options used: focusable, moved, filter, filtermode, close, minwidth,
---          minheight, drag, border, hidden, callback, col, line, zindex, highlight
---
 -- When "moved = {x1,x2}", place cursor in one of these areas: "|-->...<--|"
 --|-->               <--|   |-->               <--|   |-->               <--|      
 -- and then ":source", and move cursor left/right, notice when cursor not
 -- in an area or leaves an area, the associated popup closes
--- Drag popup by border. Use ":messages" to see output of callback and filter.
 
       -- -- -- Use "x" around the beginning of this line, filter_cb closes popup.
+--
+-- Drag popup by border.
+--
+-- There are a variety of keybindings, at the end, to play with popop features.
+--
+-- Use ":messages" to see output of callback and filter.
 
 local popup_wid
 
@@ -81,8 +81,8 @@ local function Pop1Any()
         moved = {xpos-2, xpos+20},
         filter = filter_cb,
         filtermode = "n",
-        --close = 'button',
-        close = 'click',
+        close = 'button',
+        --close = 'click',
         minwidth = 22,
         minheight = 4,
         drag = true,
